@@ -31,7 +31,8 @@ struct TimerWidgetAttributes: ActivityAttributes {
       let elapsedTimeInSeconds = getElapsedTimeInSeconds()
       let minutes = (elapsedTimeInSeconds % 3600) / 60
       let seconds = elapsedTimeInSeconds % 60
-      return String(format: "%d:%02d", minutes, seconds)
+      let milliseconds = Int((elapsedTimeInSeconds - Int(Double(elapsedTimeInSeconds).rounded())) * 1000) // Calculate milliseconds
+      return String(format: "%d:%02d.%0d", minutes, seconds, milliseconds) // Updated format to include milliseconds
     }
     
     func getTimeIntervalSinceNow() -> Double {
@@ -55,18 +56,72 @@ struct TimerWidgetLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: TimerWidgetAttributes.self) { context in
       // Lock screen/banner UI goes here
-      VStack {
-        Text(
-          Date(
-            timeIntervalSinceNow: context.state.getTimeIntervalSinceNow()
-          ),
-          style: .timer
-        )
-        .font(.title)
-        .fontWeight(.medium)
+      ZStack {
+        RoundedRectangle(cornerRadius: 24).strokeBorder(Color(red: 148/255.0, green: 163/255.0, blue: 184/255.0), lineWidth: 2)
+        HStack {
+          HStack(spacing: 8.0) {
+            if (context.state.isRunning()) {
+              Button(intent: PauseIntent()) {
+                ZStack {
+                  Circle().fill(Color.cyan.opacity(0.5))
+                  Image(systemName: "pause.fill")
+                    .imageScale(.large)
+                    .foregroundColor(.cyan)
+                }
+              }
+              .buttonStyle(PlainButtonStyle())
+              .contentShape(Rectangle())
+            } else {
+              Button(intent: ResumeIntent()) {
+                ZStack {
+                  Circle().fill(Color.cyan.opacity(0.5))
+                  Image(systemName: "play.fill")
+                    .imageScale(.large)
+                    .foregroundColor(.cyan)
+                }
+              }
+              .buttonStyle(PlainButtonStyle())
+              .contentShape(Rectangle())
+            }
+            Button(intent: ResetIntent()) {
+              ZStack {
+                Circle().fill(.gray.opacity(0.5))
+                Image(systemName: "xmark")
+                  .imageScale(.medium)
+                  .foregroundColor(.white)
+              }
+            }
+            .buttonStyle(PlainButtonStyle())
+            .contentShape(Rectangle())
+            Spacer()
+          }
+          if (!context.state.isRunning()) {
+            Text(context.state.getPausedTime())
+              .font(.title)
+              .foregroundColor(.cyan)
+              .fontWeight(.medium)
+              .monospacedDigit()
+              .transition(.identity)
+          } else {
+            Text(
+              Date(
+                timeIntervalSinceNow: context.state.getTimeIntervalSinceNow()
+              ),
+              style: .timer
+            )
+            .font(.title)
+            .foregroundColor(.cyan)
+            .fontWeight(.medium)
+            .monospacedDigit()
+            .frame(width: 60)
+            .transition(.identity)
+          }
+        }
+        .padding()
       }
-      .activityBackgroundTint(Color.cyan)
-      .activitySystemActionForegroundColor(Color.black)
+      .padding()
+      .activityBackgroundTint(Color.black.opacity(0.8))
+      .activitySystemActionForegroundColor(Color.cyan)
     } dynamicIsland: { context in
       DynamicIsland {
         // Expanded Region

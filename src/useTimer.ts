@@ -16,11 +16,11 @@ const useTimer = () => {
   const intervalId = React.useRef<NodeJS.Timeout | null>(null);
 
   const elapsedTimeInSeconds = Math.floor(elapsedTimeInMs / 1000);
-  const secondUnits = elapsedTimeInSeconds % 10;
-  const secondTens = Math.floor(elapsedTimeInSeconds / 10) % 6;
+  const milliseconds = Math.floor((elapsedTimeInMs % 1000) / 100);
+  const seconds = elapsedTimeInSeconds % 60;
   const minutes = Math.floor(elapsedTimeInSeconds / 60);
 
-  const value = `${minutes}:${secondTens}${secondUnits}`;
+  const value = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds}`;
 
   const play = useCallback(() => {
     setIsPlaying(true);
@@ -40,8 +40,10 @@ const useTimer = () => {
       startTime.current = startTime.current! + elapsedSincePaused;
       pausedTime.current = null;
       TimerWidgetModule.resume();
+      console.log('resumed from pause');
     } else {
       TimerWidgetModule.startLiveActivity(startTime.current / 1000);
+      console.log('started new');
     }
 
     intervalId.current = setInterval(() => {
