@@ -15,3 +15,11 @@ struct TimerWidgetBundle: WidgetBundle {
     }
 }
 	
+
+/*
+ * Widget Bundle Entry Point: Main entry point for the widget extension
+ * - Registers the Live Activity with the iOS widget system
+ * - Required for the widget to be recognized by iOS
+ */
+
+// Rest of the file remains the same...

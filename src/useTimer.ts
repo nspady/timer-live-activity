@@ -1,11 +1,17 @@
 import React, {useCallback, useEffect} from 'react';
-import {NativeEventEmitter, NativeModule, NativeModules} from 'react-native';
+import {NativeEventEmitter, NativeModule, NativeModules, AppState} from 'react-native';
 
 const {TimerWidgetModule} = NativeModules;
 
 const TimerEventEmitter = new NativeEventEmitter(
   NativeModules.TimerEventEmitter as NativeModule,
 );
+
+interface TimerState {
+  isRunning: boolean;
+  elapsedTime: number;
+  startTime: number;
+}
 
 const useTimer = () => {
   const [elapsedTimeInMs, setElapsedTimeInMs] = React.useState(0);
@@ -51,13 +57,14 @@ const useTimer = () => {
     }, 32);
   }, []);
 
-  const pause = useCallback(() => {
+  const pause = useCallback((timestamp?: number) => {
     setIsPlaying(false);
     removeInterval();
     if (startTime.current && !pausedTime.current) {
-      pausedTime.current = Date.now();
-      TimerWidgetModule.pause(pausedTime.current / 1000);
-      setElapsedTimeInMs(pausedTime.current! - startTime.current!);
+      pausedTime.current = timestamp ? timestamp * 1000 : Date.now();
+      const elapsedTime = pausedTime.current! - startTime.current!;
+      TimerWidgetModule.pause(pausedTime.current / 1000, elapsedTime / 1000);
+      setElapsedTimeInMs(elapsedTime);
     }
   }, []);
 
@@ -70,17 +77,47 @@ const useTimer = () => {
     TimerWidgetModule.stopLiveActivity();
   }, []);
 
+  // Event handling setup
   useEffect(() => {
+    // Set up subscriptions
     const pauseSubscription = TimerEventEmitter.addListener('onPause', pause);
     const resumeSubscription = TimerEventEmitter.addListener('onResume', play);
     const resetSubscription = TimerEventEmitter.addListener('onReset', reset);
 
+    // Return cleanup function
     return () => {
       pauseSubscription.remove();
       resumeSubscription.remove();
       resetSubscription.remove();
     };
   }, [pause, reset, play]);
+
+  // Handle app state changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        // Sync with Live Activity state
+        TimerWidgetModule.getCurrentState((states: TimerState[]) => {
+          const state = states[0];  // Get the first (and only) state object
+          if (state?.isRunning !== undefined) {
+            if (state.isRunning) {
+              startTime.current = state.startTime * 1000;
+              play();
+            } else {
+              pausedTime.current = Date.now();
+              startTime.current = state.startTime * 1000;
+              setElapsedTimeInMs(state.elapsedTime * 1000);
+              setIsPlaying(false);
+            }
+          }
+        });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [play]);
 
   function removeInterval() {
     if (intervalId.current) {

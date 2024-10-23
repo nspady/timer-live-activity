@@ -1,40 +1,42 @@
-//
-//  TimerWidgetModule.swift
-//  FancyTimer
-//
-//  Created by Raúl Gómez Acuña on 10/01/2024.
-//
+/*
+ * Bridge Module: Main interface between React Native and iOS Live Activities
+ * - Receives commands from React Native to start/stop/pause/resume the timer
+ * - Manages the Live Activity lifecycle and state
+ * - Called by the React Native JavaScript code through the bridge
+ */
 
 import Foundation
 import ActivityKit
 
+typealias RCTResponseSenderBlock = ([Any]) -> Void
+
 @objc(TimerWidgetModule)
 class TimerWidgetModule: NSObject {
   private var currentActivity: Activity<TimerWidgetAttributes>?
-  private var startedAt: Date?
-  private var pausedAt: Date?
+  private var startTime: Date?
+  private var elapsedTime: TimeInterval = 0
 
   private func areActivitiesEnabled() -> Bool {
     return ActivityAuthorizationInfo().areActivitiesEnabled
   }
   
   private func resetValues() {
-    startedAt = nil
-    pausedAt = nil
+    startTime = nil
+    elapsedTime = 0
     currentActivity = nil
   }
 
   @objc
   func startLiveActivity(_ timestamp: Double) -> Void {
-    startedAt = Date(timeIntervalSince1970: timestamp)
+    startTime = Date(timeIntervalSince1970: timestamp)
     if (!areActivitiesEnabled()) {
       // User disabled Live Activities for the app, nothing to do
       return
     }
     // Preparing data for the Live Activity
     let activityAttributes = TimerWidgetAttributes()
-    let contentState = TimerWidgetAttributes.ContentState(startedAt: startedAt, pausedAt: nil)
-    let activityContent = ActivityContent(state: contentState,  staleDate: nil)
+    let contentState = TimerWidgetAttributes.ContentState(startTime: startTime!, elapsedTime: 0, isRunning: true)
+    let activityContent = ActivityContent(state: contentState, staleDate: nil)
     do {
       // Request to start a new Live Activity with the content defined above
       currentActivity = try Activity.request(attributes: activityAttributes, content: activityContent)
@@ -45,9 +47,7 @@ class TimerWidgetModule: NSObject {
 
   @objc
   func stopLiveActivity() -> Void {
-    startedAt = nil
-    // A task is a unit of work that can run concurrently in a lightweight thread, managed by the Swift runtime
-    // It helps to avoid blocking the main thread
+    resetValues()
     Task {
       for activity in Activity<TimerWidgetAttributes>.activities {
         await activity.end(nil, dismissalPolicy: .immediate)
@@ -56,9 +56,27 @@ class TimerWidgetModule: NSObject {
   }
   
   @objc
-  func pause(_ timestamp: Double) -> Void {
-    pausedAt = Date(timeIntervalSince1970: timestamp)
-    let contentState = TimerWidgetAttributes.ContentState(startedAt: startedAt, pausedAt: pausedAt)
+  func pause(_ timestamp: Double, elapsedTime: Double) {
+    Task {
+      if let activity = currentActivity {
+        await activity.update(
+          ActivityContent(
+            state: TimerWidgetAttributes.ContentState(
+              startTime: Date(timeIntervalSince1970: timestamp),
+              elapsedTime: elapsedTime,
+              isRunning: false
+            ),
+            staleDate: nil
+          )
+        )
+      }
+    }
+  }
+  
+  @objc
+  func resume() -> Void {
+    startTime = Date()
+    let contentState = TimerWidgetAttributes.ContentState(startTime: startTime!, elapsedTime: elapsedTime, isRunning: true)
     Task {
       await currentActivity?.update(
         ActivityContent<TimerWidgetAttributes.ContentState>(
@@ -68,24 +86,20 @@ class TimerWidgetModule: NSObject {
       )
     }
   }
-  
+
   @objc
-  func resume() -> Void {
-    guard let startDate = self.startedAt else { return }
-    guard let pauseDate = self.pausedAt else { return }
-    
-    let elapsedSincePaused = Date().timeIntervalSince1970 - pauseDate.timeIntervalSince1970
-    startedAt = Date(timeIntervalSince1970: startDate.timeIntervalSince1970 + elapsedSincePaused)
-    pausedAt = nil
-    
-    let contentState = TimerWidgetAttributes.ContentState(startedAt: startedAt, pausedAt: nil)
-    Task {
-      await currentActivity?.update(
-        ActivityContent<TimerWidgetAttributes.ContentState>(
-          state: contentState,
-          staleDate: nil
-        )
-      )
+  func getCurrentState(_ callback: @escaping ([Any]) -> Void) -> Void {
+    Task { @MainActor in
+      if let activity = await Activity<TimerWidgetAttributes>.activities.first {
+        let state: [String: Any] = [
+          "isRunning": activity.content.state.isRunning,
+          "elapsedTime": activity.content.state.elapsedTime,
+          "startTime": activity.content.state.startTime.timeIntervalSince1970
+        ]
+        callback([state])
+      } else {
+        callback([[:]])
+      }
     }
   }
 }

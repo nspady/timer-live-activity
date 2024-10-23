@@ -8,11 +8,19 @@
 import Foundation
 import AppIntents
 
+/*
+ * Intent Definitions: Defines actions that can be triggered from the widget
+ * - Declares intents for pause/resume/reset actions
+ * - Uses TimerEventEmitter to send events back to React Native
+ * - These intents are triggered by button taps in the widget
+ */
+
 public struct PauseIntent: LiveActivityIntent {
   public init() {}
   public static var title: LocalizedStringResource = "Pause timer"
   public func perform() async throws -> some IntentResult {
-    TimerEventEmitter.emitter?.sendEvent(withName: "onPause", body: nil)
+    // Send event to React Native
+    TimerEventEmitter.emitter?.sendEvent(withName: "onPause", body: Date().timeIntervalSince1970)
     return .result()
   }
 }

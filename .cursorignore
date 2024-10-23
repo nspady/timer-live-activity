@@ -1,0 +1,11 @@
+# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+android/
+.prettierrc.js
+.watchmanconfig
+ios/FancyTimer.xcodeproj/
+ios/TimerWidget/Assets.xcassets/
+vendor/
+ios/FancyTimer.xcworkspace/
+ios/FancyTimer/Images.xcassets/
+*.xcworkspace
+*.xcassets
